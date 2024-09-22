@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -7,13 +8,21 @@ var config = new ConfigurationBuilder()
     .AddUserSecrets<Program>()
     .Build();
 
+var dopplerToken = config["Doppler_Token"];
+
 Console.WriteLine("Enter the username:");
 var user = Console.ReadLine();
 
 var client = new HttpClient();
+
+client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", dopplerToken);
+var dopplerResponse = await client.GetAsync("https://api.doppler.com/v3/configs/config/secrets/download?format=json");
+var dopplerContent = await dopplerResponse.Content.ReadAsStringAsync();
+var secrets = JObject.Parse(dopplerContent);
+
 var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/users/{user}/events");
 request.Headers.Add("Accept", "application/vnd.github+json");
-request.Headers.Add("Authorization", $"token {config["GITHUB_API_TOKEN"]}");
+request.Headers.Add("Authorization", $"token {secrets["GITHUB_API_TOKEN"]}");
 request.Headers.Add("User-Agent", "github-activity");
 request.Headers.Add("X-GitHub-Api-Version","2022-11-28");
 var response = await client.SendAsync(request);
@@ -26,8 +35,6 @@ try {
 }
 
 var content = await response.Content.ReadAsStringAsync();
-JsonReader reader = new JsonTextReader(new StringReader(content));
-var serializer = new JsonSerializer();
 var elements = JArray.Parse(content);
 
 if (elements == null) {
@@ -124,4 +131,21 @@ foreach (var element in elements) {
             break;
         }
     }
+}
+
+public class Doppler
+{
+    
+    [JsonPropertyName("DOPPLER_PROJECT")]
+    public string DopplerProject { get; set; }
+
+    [JsonPropertyName("DOPPLER_ENVIRONMENT")]
+    public string DopplerEnvironment { get; set; }
+
+    [JsonPropertyName("DOPPLER_CONFIG")]
+    public string DopplerConfig { get; set; }
+    
+    [JsonPropertyName("GITHUB_API_TOKEN")]
+    public string GithubApiToken { get; set; }
+    
 }
